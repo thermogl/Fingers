@@ -37,19 +37,28 @@ class GestureView: UIView {
         case .changed:
             print("changed")
         case .ended:
-            print(sender.recognizedTouchesToViews.count)
-            if sender.recognizedTouchesToViews.count >= 10 {
-                sender.recognizedTouchesToViews.forEach { pair in
-                    let view = TouchView(frame: pair.value.frame)
-                    self.addSubview(view)
-                }
-            }
+            self.persist(views: sender.recognizedTouchesToViews.values.map { $0 })
         case .cancelled:
             print("cancelled")
         case .failed:
             print("failed")
         @unknown default:
             print("unknown")
+        }
+    }
+    
+    private func persist(views: [UIView]) {
+        guard views.count >= 10 else { return }
+        
+        Hand.make(elements: views) { view in
+            return view.center
+        }.forEach { hand in
+            hand.fingers.enumerated().forEach { index, finger in
+                let view = TouchView(frame: .init(x: 0, y: 0, width: 100, height: 100))
+                view.center = finger.center
+                view.label.text = String(index)
+                self.addSubview(view)
+            }
         }
     }
 }

@@ -23,9 +23,6 @@ class BothHandsGestureRecognizer: UIGestureRecognizer {
         touches.forEach { touch in
             self.touchToView[touch]?.center = touch.visibleLocation(in: self.view)
         }
-        if self.touchToView.count >= 10 {
-            self.state = .changed
-        }
         self.updateLabels()
     }
     
@@ -69,11 +66,54 @@ class BothHandsGestureRecognizer: UIGestureRecognizer {
     
     private func updateLabels() {
         let touchViewCount = self.touchToView.count
-        let sortedViews = self.touchToView.values.sorted(by: { $0.frame.minX < $1.frame.minX })
-        sortedViews.enumerated().forEach { (index, view) in
-            view.label.text = .init(index)
-            view.isHidden = touchViewCount < 8
+        
+        Hand.make(elements: self.touchToView.values.map { $0 }) { view in
+            return view.center
+        }.forEach { hand in
+            hand.fingers.enumerated().forEach { index, finger in
+                finger.label.text = String(index)
+                finger.isHidden = touchViewCount < 8
+                print(touchViewCount)
+            }
         }
+    }
+}
+
+struct Hand<Element> {
+    let side: Side
+    enum Side {
+        case left
+        case right
+    }
+    let fingers: [Element]
+    
+    static func make(elements: [Element], pointProvider: (Element) -> CGPoint) -> [Hand] {
+        guard elements.count > 1 else { return [.init(side: .left, fingers: elements)] }
+        
+        let midCenterPoint = elements.map { pointProvider($0) }.getMidPoint()
+        
+        let leftElements = elements.filter { pointProvider($0).x < midCenterPoint.x }
+        let rightElements = elements.filter { pointProvider($0).x > midCenterPoint.x }
+        
+        let leftCenterPoint = leftElements.map { pointProvider($0) }.getMidPoint()
+        let rightCenterPoint = rightElements.map { pointProvider($0) }.getMidPoint()
+        
+        let sortedLeftElements = leftElements.sorted { element1, element2 in
+            return pointProvider(element1)
+                .angleForLeftHand(using: leftCenterPoint) >
+            pointProvider(element2)
+                .angleForLeftHand(using: leftCenterPoint)
+        }
+        let sortedRightElements = rightElements.sorted { element1, element2 in
+            return pointProvider(element1)
+                .angleForLeftHand(using: rightCenterPoint) <
+                    pointProvider(element2)
+                .angleForLeftHand(using: rightCenterPoint)
+        }
+        return [
+            .init(side: .left, fingers: sortedLeftElements),
+            .init(side: .right, fingers: sortedRightElements)
+        ]
     }
 }
 
@@ -82,5 +122,29 @@ extension UITouch {
         var location = self.location(in: view)
         location.y -= 50
         return location
+    }
+}
+
+extension Collection where Element == CGPoint {
+    func getMidPoint() -> CGPoint {
+        let totalCenterPoint = self.reduce(into: CGPoint.zero) { partialResult, point in
+            partialResult.x += point.x
+            partialResult.y += point.y
+        }
+        let numPoints = CGFloat(self.count)
+        let midCenterPoint = CGPoint(
+            x: totalCenterPoint.x / numPoints,
+            y: totalCenterPoint.y / numPoints
+        )
+        return midCenterPoint
+    }
+}
+
+extension CGPoint {
+    
+    func angleForLeftHand(using: CGPoint) -> CGFloat {
+        let deltaX = using.x - self.x
+        let deltaY = using.y - self.y
+        return atan2(deltaX, deltaY)
     }
 }

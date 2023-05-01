@@ -14,6 +14,7 @@ class TouchView: UIView {
         label.textColor = .label
         label.font = .systemFont(ofSize: 50, weight: .semibold)
         label.textAlignment = .center
+        label.adjustsFontSizeToFitWidth = true
         return label
     }()
     
